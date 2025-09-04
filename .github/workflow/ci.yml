@@ -1,0 +1,54 @@
+# GitHub Actions CI for Filer
+
+Here’s a CI workflow configuration that will automatically run your pytest suite on every push and pull request.
+
+```
+.github/
+└── workflows/
+    └── ci.yml
+```
+
+---
+
+### `.github/workflows/ci.yml`
+```yaml
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
+
+      - name: Run tests
+        run: pytest -v
+```
+
+---
+
+This workflow will:
+- Run on pushes and pull requests targeting `main`.
+- Test across Python 3.9, 3.10, and 3.11.
+- Install your package in editable mode and run the full pytest suite with verbose output.
