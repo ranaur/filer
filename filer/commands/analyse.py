@@ -29,11 +29,11 @@ def run(args):
                     st = utils.file_stat(fpath)
                 except FileNotFoundError:
                     continue
-                cur.execute("INSERT OR REPLACE INTO files (name,ctime,mtime,atime,size,directory,mode,uid,gid,inode,dev,nlink,analysed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)",
-                    (fname,st['ctime'],st['mtime'],st['atime'],st['size'],dir_id,st['mode'],st['uid'],st['gid'],st['inode'],st['dev'],st['nlink']))
+                cur.execute("INSERT INTO files (name,ctime,mtime,atime,size,directory,mode,uid,gid,inode,dev,nlink,analysed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1) ON CONFLICT(name) DO UPDATE SET ctime=?,mtime=?,atime=?,size=?,directory=?,mode=?,uid=?,gid=?,inode=?,dev=?,nlink=?,analysed=1",
+                    (fname,st['ctime'],st['mtime'],st['atime'],st['size'],dir_id,st['mode'],st['uid'],st['gid'],st['inode'],st['dev'],st['nlink'],st['ctime'],st['mtime'],st['atime'],st['size'],dir_id,st['mode'],st['uid'],st['gid'],st['inode'],st['dev'],st['nlink']))
                 fid = cur.execute("SELECT id FROM files WHERE name=? AND directory=?", (fname,dir_id)).fetchone()[0]
                 if args.all_hashes:
                     sha = utils.file_sha256(fpath)
-                    cur.execute("INSERT OR REPLACE INTO sha256 (file,sha256,processed) VALUES (?,?,?)", (fid,sha,utils.now()))
+                    cur.execute("INSERT OR REPLACE INTO sha256 (file,sha256,processed_at) VALUES (?,?,?)", (fid,sha,utils.now()))
     db.touch_update(conn)
     conn.commit()

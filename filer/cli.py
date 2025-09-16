@@ -28,3 +28,4 @@ def main():
     dedup.register_parser(subparsers)
 
     args = parser.parse_args()
+    args.func(args)

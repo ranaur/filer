@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS directories (
 
 CREATE TABLE IF NOT EXISTS files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     ctime REAL,
     mtime REAL,
     atime REAL,
