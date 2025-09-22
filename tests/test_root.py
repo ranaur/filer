@@ -1,27 +1,59 @@
-import os
-from filer import db
-from filer.commands import root
+from filer import tests
 
 
 def test_root_add_and_list(tmp_path):
-    db_path = tmp_path / "root.sqlite3"
-    conn = db.connect(str(db_path))
+    database = tmp_path / "test_root_add_and_list"
+
+    tests.newDatabase(database)
+
     d = tmp_path / "subdir"
     d.mkdir()
-    args = type("obj", (), {"db": str(db_path), "list": False, "delete": False, "classification": "high", "paths": [str(d)]})
-    root.run(args)
-    rows = conn.execute("SELECT path,classification FROM roots").fetchall()
-    assert (str(d), "high") in rows
+    
+    result = tests.run_command([ "root", str(d)])
+    assert result.returncode == 0
+    
+    result = tests.run_command([ "root", "--list"])
+    assert result.returncode == 0
+    assert result.stdout.strip() == str(d)
+
+    tests.deleteDatabase()
 
 
 def test_root_delete(tmp_path):
-    db_path = tmp_path / "root.sqlite3"
-    conn = db.connect(str(db_path))
+    database = tmp_path / "test_root_delete"
+
+    tests.newDatabase(database)
+
     d = tmp_path / "subdir"
     d.mkdir()
-    conn.execute("INSERT INTO roots (path,classification) VALUES (?,?)", (str(d), "medium"))
-    conn.commit()
-    args = type("obj", (), {"db": str(db_path), "list": False, "delete": True, "classification": "medium", "paths": [str(d)]})
-    root.run(args)
-    row = conn.execute("SELECT * FROM roots").fetchone()
-    assert row is None
+    
+    tests.run_command([ "root", d])
+    tests.run_command([ "root", "--delete", d])
+
+    row = tests.queryAll("SELECT * FROM roots")
+    assert row == []
+
+    tests.deleteDatabase()
+
+def test_root_add_delete(tmp_path):
+    database = tmp_path / "test_root_add_delete"
+    tests.newDatabase(database)
+
+    d = tmp_path / "subdir"
+    d.mkdir()
+    
+    d2 = tmp_path / "subdir2"
+    d2.mkdir()
+    
+    tests.run_command([ "root", str(d)])
+    tests.run_command([ "root", str(d2)])
+    tests.run_command([ "root", "--delete", str(d2)])
+
+    row = tests.queryAll("SELECT * FROM roots")
+    assert len(row) == 1
+
+    result = tests.run_command([ "root", "--list"])
+    assert result.returncode == 0
+    assert result.stdout.strip() == str(d)
+
+    tests.deleteDatabase()

@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS files (
     name TEXT NOT NULL UNIQUE,
     ctime REAL,
     mtime REAL,
-    atime REAL,
     size INTEGER,
     directory INTEGER NOT NULL,
     mode INTEGER,

@@ -1,6 +1,7 @@
 import os
+import subprocess
+
 from filer import db
-from filer.commands import dir
 
 
 def test_dir_set_and_list(tmp_path, capsys):
@@ -10,8 +11,14 @@ def test_dir_set_and_list(tmp_path, capsys):
     d.mkdir()
     conn.execute("INSERT INTO directories (name,root,classification,analysed) VALUES (?,?,?,1)", ("sub",1,"medium"))
     conn.commit()
-    args = type("obj", (), {"db": str(db_path), "path": str(d), "classification": "high"})
-    dir.run_set(args)
+    
+    result = subprocess.run([
+        "filer",
+        "dir", "set", "--db", str(db_path),
+        "--path", str(d), "--classification", "high"
+    ], capture_output=True, text=True)
+    
+    assert result.returncode == 0
     row = conn.execute("SELECT classification FROM directories WHERE name=?", ("sub",)).fetchone()
     assert row[0] == "high"
 
@@ -23,7 +30,13 @@ def test_dir_exclude(tmp_path):
     d.mkdir()
     conn.execute("INSERT INTO directories (name,root,classification,analysed) VALUES (?,?,?,1)", ("sub",1,"medium"))
     conn.commit()
-    args = type("obj", (), {"db": str(db_path), "path": str(d)})
-    dir.run_exclude(args)
+    
+    result = subprocess.run([
+        "filer",
+        "dir", "exclude", "--db", str(db_path),
+        "--path", str(d)
+    ], capture_output=True, text=True)
+    
+    assert result.returncode == 0
     row = conn.execute("SELECT classification FROM directories WHERE name=?", ("sub",)).fetchone()
     assert row[0] == "excluded"

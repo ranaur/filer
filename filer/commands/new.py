@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from filer import db
+import os
 
 
 def register_parser(subparsers):
@@ -12,19 +11,19 @@ def register_parser(subparsers):
       filer new NAME [--dir /path/to/store]
 
     Creates a SQLite filebase named `NAME.sqlite3` inside the given directory
-    (defaults to ~/.filer). If the DB already exists it will be opened.
+    If the DB already exists gives an error.
     """
     p = subparsers.add_parser("new", help="Initialize a new filebase (SQLite DB)")
     p.add_argument("name", help="Name for the filebase (no extension)")
-    p.add_argument("--dir", default=None, help="Directory to store DB (default: ~/.filer)")
     p.set_defaults(func=run)
 
 
 def run(args):
-    base_dir = Path(args.dir) if args.dir else Path.home() / ".filer"
-    base_dir.mkdir(parents=True, exist_ok=True)
+    db_path = f"{args.name}.sqlite3"
 
-    db_path = base_dir / f"{args.name}.sqlite3"
+    if os.path.exists(db_path):
+        print(f"Error: {db_path} already exists")
+        return 1
 
     # Connect will create and initialize schema on first use
     conn = db.connect(str(db_path))
@@ -33,3 +32,5 @@ def run(args):
     db.touch_update(conn)
 
     print(f"Initialized filebase at {db_path}")
+
+    return 0

@@ -1,21 +1,30 @@
-import os
-from filer import db
-from filer.commands import check
+from pathlib import Path
+import pytest
+from filer import tests
 
 
-def test_check_detects_missing_file(tmp_path, capsys):
-    db_path = tmp_path / "check.sqlite3"
-    conn = db.connect(str(db_path))
-    rootdir = tmp_path / "root"
-    rootdir.mkdir()
-    f = rootdir / "f.txt"
-    f.write_text("data")
-    conn.execute("INSERT INTO roots (path,classification) VALUES (?,?)", (str(rootdir), "medium"))
-    conn.execute("INSERT INTO directories (name,root,classification,analysed) VALUES (?,?,?,1)", ("root",1,"medium"))
-    conn.execute("INSERT INTO files (name,ctime,mtime,atime,size,directory,mode,uid,gid,inode,dev,nlink,analysed) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1)", ("f.txt",1,1,1,4,1,0,0,0,0,0,0,1))
-    conn.commit()
-    f.unlink()
-    args = type("obj", (), {"db": str(db_path)})
-    check.run(args)
-    captured = capsys.readouterr()
-    assert "File deleted" in captured.out
+def test_check_detects_missing_file(tmp_path):
+    # Setup
+    database = "test_check"
+    tests.newDatabase(database)
+    
+    # Create test environment
+    test_path, root_id = tests.create_test_environment(database, tmp_path, "test_check")
+    
+    # Create a test file
+    test_file = test_path / "f.txt"
+    test_file.write_text("data")
+    
+    
+    # Delete the file to simulate it going missing
+    test_file.unlink()
+    
+    # Run check command
+    result = tests.run_command(["check", "--db", database])
+    
+    # Verify
+    assert result.returncode == 0
+    assert "File deleted" in result.stdout
+    
+    # Cleanup
+    tests.deleteDatabase(database)

@@ -1,6 +1,6 @@
 import argparse
 import sys
-from filer.commands import new, root, analyse, dir, check, dedup
+from filer.commands import new, root, analyse, dir, check, dedup, ls
 
 
 
@@ -26,6 +26,9 @@ def main():
 
     # dedup
     dedup.register_parser(subparsers)
+
+    # ls
+    ls.register_parser(subparsers)
 
     args = parser.parse_args()
     args.func(args)
