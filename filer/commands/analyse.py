@@ -37,6 +37,7 @@ def run(args):
         files_inserted = 0
         files_updated = 0
         files_deleted = 0
+        files_skipped = 0
         
         # Get all root directories
         roots = cur.execute("SELECT id, path FROM roots").fetchall()
@@ -99,6 +100,7 @@ def run(args):
                         FROM files WHERE name=? AND directory=?
                     """, (fname, dir_id)).fetchone()
                     
+                    file_state = 0
                     if existing is None:
                         # File doesn't exist, insert it
                         cur.execute("""
@@ -110,7 +112,7 @@ def run(args):
                             fname, st['ctime'], st['mtime'], st['size'], dir_id,
                             st['mode'], st['uid'], st['gid'], st['inode'], st['dev'], st['nlink']
                         ))
-                        files_inserted += 1
+                        file_state = 1 # inserted
                     else:
                         # Check if any values have changed
                         if (existing[0] != st['ctime'] or existing[1] != st['mtime'] or 
@@ -129,12 +131,13 @@ def run(args):
                                 st['uid'], st['gid'], st['inode'], st['dev'], st['nlink'],
                                 fname, dir_id
                             ))
-                            files_updated += 1
+                            file_state = 2 # updated
                         else:
                             # Values are the same, just mark as analysed
                             cur.execute("""
                                 UPDATE files SET analysed=1 WHERE name=? AND directory=?
                             """, (fname, dir_id))
+                            file_state = 3 # analysed, but skipped
                    
                     # Calculate hash if requested
                     if args.all_hashes:
@@ -143,15 +146,26 @@ def run(args):
                             (fname, dir_id)
                         ).fetchone()[0]
                         
-                        sha = utils.file_sha256(fpath)
-                        cur.execute(
-                            """
-                            INSERT OR REPLACE INTO sha256 
-                            (file, sha256, processed_at) 
-                            VALUES (?, ?, ?)
-                            """,
-                            (file_id, sha, utils.now())
-                        )
+                        # Check if hash already exists
+                        existing_hash = cur.execute(
+                            "SELECT sha256 FROM sha256 WHERE file=?",
+                            (file_id,)
+                        ).fetchone()
+                        
+                        # TODO: compare the hash and update if different
+                        if not existing_hash:
+                            file_state = 2 # updated
+                            sha = utils.file_sha256(fpath)
+                            cur.execute(
+                                "INSERT INTO sha256 (file, sha256, processed_at) VALUES (?, ?, ?)",
+                                (file_id, sha, utils.now())
+                            )
+                    if file_state == 1:
+                        files_inserted += 1
+                    elif file_state == 2:
+                        files_updated += 1
+                    elif file_state == 3:
+                        files_skipped += 1
         
         # Delete files that were not analysed (no longer exist on disk)
         deleted_files = cur.execute("""
