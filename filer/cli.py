@@ -1,9 +1,6 @@
 import argparse
 import sys
-from filer.commands import new, root, analyse, dir, check, dedup, ls
-
-
-
+from filer.commands import new, root, analyse, dir, check, dedup, ls, tree
 
 def main():
     parser = argparse.ArgumentParser(prog="filer", description="File inventory and deduplication tool")
@@ -29,6 +26,9 @@ def main():
 
     # ls
     ls.register_parser(subparsers)
+
+    # tree
+    tree.register_parser(subparsers)
 
     args = parser.parse_args()
     args.func(args)
