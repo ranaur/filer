@@ -19,7 +19,6 @@ from filer import db
 # TODO: add ls --long -l compatible output, showing all file attributes
 # TODO: add --hash option, showing the hash value
 # TODO: add --fullpath option, showing the full path
-# TODO: add --tree option to show directory tree with files
 
 def format_mode(st_mode: int) -> str:
     """Convert file mode to a string like 'drwxr-xr-x'."""
@@ -81,14 +80,13 @@ def register_parser(subparsers):
     """Register the `ls` subcommand.
 
     Usage:
-      filer ls [--long/-l] [--hash] [--fullpath] [--tree]
+      filer ls [--long/-l] [--hash] [--fullpath]
 
     List all files stored in the database.
 
     --long/-l shows a long listing format, like ls -l
     --hash shows the hash value of the files
     --fullpath shows the full path of the files
-    --tree shows the directory tree with files
 
     The DB argument sets the database to use. Defaults to FILER_DB environment variable if none is given.
     """
@@ -98,31 +96,7 @@ def register_parser(subparsers):
     p.add_argument("-l", "--long", action="store_true", help="Use a long listing format")
     p.add_argument("--hash", action="store_true", help="Show hash values")
     p.add_argument("--fullpath", action="store_true", help="Show full paths")
-    p.add_argument("--tree", action="store_true", help="Show directory tree")
     p.set_defaults(func=run)
-
-def build_tree(files: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Build a directory tree structure from a list of files."""
-    tree = {}
-    for file in files:
-        path_parts = file['path'].split(os.sep)
-        current = tree
-        for part in path_parts[:-1]:
-            if part not in current:
-                current[part] = {}
-            current = current[part]
-        current[path_parts[-1]] = file
-    return tree
-
-def print_tree(node: Dict, prefix: str = '') -> None:
-    """Print directory tree structure."""
-    items = sorted(node.items())
-    for i, (name, value) in enumerate(items):
-        is_last = i == len(items) - 1
-        print(f"{prefix}{'└── ' if is_last else '├── '}{name}")
-        if isinstance(value, dict):
-            new_prefix = prefix + ("    " if is_last else "│   ")
-            print_tree(value, new_prefix)
 
 def run(args):
     conn = db.connect(args.db)
@@ -174,21 +148,6 @@ def run(args):
             'hash': row['file_hash']
         })
     
-    if args.tree:
-        tree = {}
-        for file in files:
-            parts = file['path'].split(os.sep)
-            current = tree
-            for part in parts[:-1]:
-                if part not in current:
-                    current[part] = {}
-                current = current[part]
-            # Only store the name, not the full file details
-            current[parts[-1]] = {}
-        
-        print_tree(tree)
-        return
-    
     # Sort files by path
     files.sort(key=lambda x: x['path'])
     
@@ -198,22 +157,14 @@ def run(args):
             nlink = str(file['nlink']) if file['nlink'] is not None else '?'
             size = format_size(file['size']) if file['size'] is not None else '?'
             mtime = format_mtime(file['mtime']) if file['mtime'] else '?'
-            
-            # Get username and groupname, fallback to UID/GID if not available
             username = get_username(file['uid'])
             groupname = get_groupname(file['gid'])
             
-            name = file['fullpath'] if args.fullpath else file['path']
-            hash_str = f" {file['hash']}" if args.hash and file['hash'] else ""
+            path = file['fullpath'] if args.fullpath else file['path']
+            hash_str = f"  {file['hash']}" if args.hash and file['hash'] else ""
             
-            # Use a fixed width for username and groupname for alignment
-            user_width = max(1, len(username))  # At least 8 characters for alignment
-            group_width = max(1, len(groupname))  # At least 8 characters for alignment
-            
-            print(f"{mode} {nlink} {username:{user_width}} {groupname:{group_width}} {size:>4} {mtime} {name}{hash_str}")
+            print(f"{mode} {nlink:>3} {username:<8} {groupname:<8} {size:>8} {mtime} {path}{hash_str}")
         else:
             path = file['fullpath'] if args.fullpath else file['path']
-            if args.hash and file['hash']:
-                print(f"{path}  {file['hash']}")
-            else:
-                print(path)
+            hash_str = f"  {file['hash']}" if args.hash and file['hash'] else ""
+            print(f"{path}{hash_str}")
