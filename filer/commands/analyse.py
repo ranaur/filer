@@ -39,16 +39,15 @@ def run(args):
         files_deleted = 0
         files_skipped = 0
         
-        # Get all root directories
-        roots = cur.execute("SELECT id, path FROM roots").fetchall()
-        if not roots:
-            print("No root directories found. Add directories using 'filer root' command.")
-            return 0
-
         # clear analysed flag
         cur.execute("""
             UPDATE files set analysed=0
             """)
+
+        roots = cur.execute("SELECT id, path FROM roots").fetchall()
+        if not roots:
+            print("No root directories found. Add directories using 'filer root' command.")
+            return 0
 
         # Process each root directory
         for root_id, root_path in roots:
@@ -56,33 +55,23 @@ def run(args):
             if not os.path.exists(root_path):
                 print(f"Warning: Root directory '{root_path}' does not exist, skipping...")
                 continue
-              
+            
+            dir_id = None
             for dirpath, dirnames, filenames in os.walk(root_path):
-                #print(f'DIR: path = {dirpath}  dirnames = {dirnames} filenames = {filenames}')
-                dirname = os.path.basename(dirpath)
-                parent = os.path.dirname(dirpath)
-                parent_id = None
-                
-                # Find parent directory ID if it exists
-                if parent and parent != dirpath:
-                    row = cur.execute(
-                        "SELECT id FROM directories WHERE name=? AND root=?",
-                        (os.path.basename(parent), root_id)
-                    ).fetchone()
-                    if row:
-                        parent_id = row[0]
+                dirlocalpath = os.path.relpath(dirpath, root_path)
+                if dirlocalpath == '.':
+                    dirlocalpath = ''
+                #print(f'DIR: path = {dirpath}  dirnames = {dirnames} filenames = {filenames} dirlocalpath = {dirlocalpath}')
 
-                # Add or update directory
-                cur.execute("""
-                    INSERT OR IGNORE INTO directories 
-                    (name, parent, root, classification, analysed) 
-                    VALUES (?, ?, ?, ?, 1)
-                """, (dirname, parent_id, root_id, "inherited"))
-                
-                dir_id = cur.execute(
-                    "SELECT id FROM directories WHERE name=? AND root=? AND (parent=? OR (parent IS NULL AND ? IS NULL))",
-                    (dirname, root_id, parent_id, parent_id)
-                ).fetchone()[0]
+                # Find parent directory ID if it exists
+                dir_id = db.get_directory_by_path(conn, root_id, dirlocalpath)
+                #if dir_id is None:
+                #   print(f"Warning: Directory '{dirlocalpath}' does not exist, skipping...")
+                #   continue
+
+                # insert subdirectories
+                for dirname in dirnames:
+                    db.upsert_directory(conn, root_id, os.path.basename(dirname), dir_id, os.path.join(dirlocalpath, dirname), "inherited")
                 
                 # Process files in the current directory
                 for fname in filenames:
@@ -99,7 +88,7 @@ def run(args):
                         SELECT ctime, mtime, size, mode, uid, gid, inode, dev, nlink
                         FROM files WHERE name=? AND directory=?
                     """, (fname, dir_id)).fetchone()
-                    
+                        
                     file_state = 0
                     if existing is None:
                         # File doesn't exist, insert it
