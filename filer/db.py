@@ -90,13 +90,24 @@ def touch_update(conn: sqlite3.Connection) -> None:
     conn.execute("UPDATE config SET value=? WHERE key='last_update'", (now,))
     conn.commit()
 
-def upsert_directory(conn: sqlite3.Connection, root_id: int, name: str, parent_id: int, path: str, classification: str) -> int:
+def upsert_directory(conn: sqlite3.Connection, root_id: int, parent_id: int, name: str, path: str, classification: str) -> int:
     #print(f"DEBUG: upsert_directory: root_id={root_id}, name={name!r}, parent_id={parent_id}, path={path!r}, classification={classification!r}")
     """Upsert a directory in the directories table."""
+    row = conn.execute("""
+        SELECT id FROM directories WHERE root=? AND parent is ? AND name=?
+    """, (root_id, parent_id, name)).fetchone()
+    id = row[0] if row else None
+
     conn.execute("""
-        INSERT OR REPLACE INTO directories (name, parent, root, path, classification, analysed)
-        VALUES (?, ?, ?, ?, ?, 1)
-    """, (name, parent_id, root_id, path, classification))
+        INSERT OR REPLACE INTO directories (id, name, parent, root, path, classification, analysed)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+    """, (id, name, parent_id, root_id, path, classification))
+
+    if id is None: 
+        row = conn.execute("SELECT last_insert_rowid()").fetchone()
+        id = row[0] if row else None
+    return id
+
 
 def get_directory_by_path(conn: sqlite3.Connection, root_id: int, path: str) -> int:
     #print(f"DEBUG: get_directory_by_path: root_id={root_id}, path={path!r}")
