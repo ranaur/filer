@@ -67,13 +67,15 @@ Files deleted:  1
 
 """
     
-    tests.deleteDatabase()
+    result = tests.run_command(["analyse", "--all-hashes"])
+    result.stdout = """
 
-# TODO: make a test that runs analyse twice and the result must be:
-"""
 Analysis complete!
 Files inserted: 0
 Files updated:  0
 Files deleted:  0
 
 """
+    tests.deleteDatabase()
+
+# test with two roots
