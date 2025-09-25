@@ -36,14 +36,19 @@ def test_tree_displays_directory_structure(tmp_path):
     # └── subdir/
     #     ├── file3.md
     #     └── file4.json
-
-    expected_output = f"""├── file1.txt
+    expected_output = f"""
+{root_dir}/
+├── file1.txt
 ├── file2.py
-└── subdir
+└── subdir/
     ├── file3.md
     └── file4.json
 """
 
+    print("result.stdout.strip()")
+    print(result.stdout.strip())
+    print("expected_output.strip()")
+    print(expected_output.strip())
     assert result.stdout.strip() == expected_output.strip()
 
     tests.deleteDatabase()
@@ -82,25 +87,22 @@ def test_tree_displays_directory_structure2(tmp_path):
     # 7. Run tree command and assert the output
     result = tests.run_command(["tree"])
 
-    # Expected tree structure:
-    # test_root/
-    # ├── file1.txt
-    # ├── file2.py
-    # └── subdir/
-    #     ├── file3.md
-    #     └── file4.json
-
     expected_output = f"""
+{root_dir}/
 ├── file1.txt
 ├── file2.py
-├── subdir
+├── subdir/
 │   ├── file3.md
 │   └── file4.json
-└── subdir2
+└── subdir2/
     ├── file5.md
     └── file6.json
 """
 
+    print("result.stdout.strip()")
+    print(result.stdout.strip())
+    print("expected_output.strip()")
+    print(expected_output.strip())
     assert result.stdout.strip() == expected_output.strip()
 
     tests.deleteDatabase()
