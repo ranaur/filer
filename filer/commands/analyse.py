@@ -56,7 +56,7 @@ def run(args):
                 print(f"Warning: Root directory '{root_path}' does not exist, skipping...")
                 continue
             
-            db.upsert_directory(conn, root_id, os.path.basename(root_path), None, "", "inherited")
+            db.upsert_directory(conn, root_id, None, os.path.basename(root_path), "", "inherited")
             dir_id = db.get_directory_by_path(conn, root_id, "")
 
             for dirpath, dirnames, filenames in os.walk(root_path):
@@ -73,11 +73,11 @@ def run(args):
 
                 # insert subdirectories
                 for dirname in dirnames:
-                    db.upsert_directory(conn, root_id, os.path.basename(dirname), dir_id, os.path.join(dirlocalpath, dirname), "inherited")
+                    db.upsert_directory(conn, root_id, dir_id, os.path.basename(dirname), os.path.join(dirlocalpath, dirname), "inherited")
                 
                 # Process files in the current directory
                 for fname in filenames:
-                    #print(f"FILE: name = {fname}")
+                    #print(f"FILE: name = {fname} dir_id = {dir_id}")
                     fpath = os.path.join(dirpath, fname)
                     try:
                         st = utils.file_stat(fpath)
