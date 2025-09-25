@@ -68,3 +68,12 @@ Files deleted:  1
 """
     
     tests.deleteDatabase()
+
+# TODO: make a test that runs analyse twice and the result must be:
+"""
+Analysis complete!
+Files inserted: 0
+Files updated:  0
+Files deleted:  0
+
+"""
