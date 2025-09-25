@@ -2,29 +2,87 @@ import os
 from typing import Dict, Any, List
 from filer import db
 
-def print_tree(node: Dict, prefix: str = '') -> None:
-    """Print directory tree structure."""
-    items = sorted(node.items())
-    for i, (name, value) in enumerate(items):
-        is_last = i == len(items) - 1
-        print(f"{prefix}{'└── ' if is_last else '├── '}{name}")
-        if isinstance(value, dict):
-            new_prefix = prefix + ("    " if is_last else "│   ")
-            print_tree(value, new_prefix)
+def walk_roots(cur, initial_state={}, start_root_cb = None, end_root_cb = None, start_directory_cb = None, end_directory_cb = None, file_cb = None):
+    """Transverse directories in the database.
+    
+    start_directory_cb(state, dir_name) => callback that is called before any directory is processed
+    end_directory_cb(state, dir_name) => callback that is called after any directory is processed
+    file_cb(state, file_name) => callback that is called for each file
+    state => state that is passed to the callbacks
+    
+    Traverse directories in the database.
+    
+    The function is a recursive function that traverses the directories in the database.
+    For each directory, it calls the `start_directory_cb` function before traversing the subdirectories,
+    and the `end_directory_cb` function after traversing the subdirectories.
+    For each file, it calls the `file_cb` function.
+    
+    The `state` parameter is an optional parameter that is passed to the callbacks.
+    It can be used to pass additional information to the callbacks.
+    
+    Example:
+        def start_directory_cb(state, dir_name):
+            print(f"Entering directory {dir_name}")
+    
+        def end_directory_cb(state, dir_name):
+            print(f"Leaving directory {dir_name}")
+    
+        def file_cb(state, file_name):
+            print(f"Found file {file_name}")
+    
+        traverse_directories(start_directory_cb, end_directory_cb, file_cb, state=["a", "b", "c"])
+    
+    This will traverse the directories in the database and call the callbacks for each directory and file.
+    The `state` parameter is passed to the callbacks, and its value is `["a", "b", "c"]`.
+    """
+    
+    cur.execute("""
+    SELECT id, path, classification from roots
+    """)
+    root_dirs = cur.fetchall()
+    
+    for root in root_dirs:
+        if start_root_cb is not None:
+            start_root_cb(initial_state, root) 
 
-def build_tree(files: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Build a directory tree structure from a list of files."""
-    tree = {}
+        walk_directories(cur, initial_state, root["id"], None, start_directory_cb, end_directory_cb, file_cb)
+
+        if end_root_cb is not None:
+            end_root_cb(initial_state, root) 
+
+def walk_directories(cur, state, root_id, directory_id = None, start_directory_cb = None, end_directory_cb = None, file_cb = None, depth = 1):
+    if start_directory_cb is not None:
+        start_directory_cb(state, directory_id, depth)
+
+    cur.execute("""
+    SELECT files.id id, directories.id directory_id, files.name name, classification, files.ctime, files.mtime, files.size, files.mode, files.uid, files.gid, files.inode, files.dev, files.nlink, "file" type
+    FROM files 
+    JOIN directories ON files.directory = directories.id
+    WHERE files.directory is ? and roots.id is ?
+    UNION ALL
+    SELECT "", directories.id directory_id, directories.name name, directories.classification, "", "", "", "", "", "", "", "", "", "directory" type
+    FROM directories WHERE parent is ? and roots.id is ?
+    ORDER BY name""", (directory_id, root_id, directory_id, root_id))
+    files = cur.fetchall()
+
+    pos=1
     for file in files:
-        path_parts = file['path'].split(os.sep)
-        current = tree
-        for part in path_parts[:-1]:
-            if part not in current:
-                current[part] = {}
-            current = current[part]
-        current[path_parts[-1]] = {}
-    return tree
+        if pos == len(files):
+            state[depth]="last"
+        else:
+            state[depth]="not last"
 
+        if file_cb is not None:     
+            file_cb(state, file, depth)
+
+        if file["type"] == "directory":
+            _walk_directories(cur, start_directory_cb, end_directory_cb, file_cb, file["directory_id"], state, depth + 1)
+        pos = pos + 1
+
+    if end_directory_cb is not None:
+        end_directory_cb(state, directory_id, depth)
+    
+    
 def register_parser(subparsers):
     """Register the `tree` subcommand.
 
@@ -38,34 +96,33 @@ def register_parser(subparsers):
     p.add_argument("--root", help="Filter by root directory")
     p.set_defaults(func=run)
 
+
+def tree_file_cb(state, file, depth):
+    prefix = ""
+    for level in range(1, depth):
+        if state[level] == "last":
+            prefix = prefix + " "
+        else:
+            prefix = prefix + "│"
+
+        prefix = prefix + "   "
+    if state[depth] == "last":
+        prefix = prefix + "└── "
+    else:
+        prefix = prefix + "├── "
+
+    if file["type"] == "directory":
+        suffix="/"
+    else:
+        suffix=""
+
+    print(f"{prefix}{file['name']}{suffix}")
+
+def tree_start_root_cb(state, root):
+    print(f"{root['path']}/")
+
 def run(args):
     conn = db.connect(args.db)
     cur = conn.cursor()
-    
-    # Query to get file details
-    query = """
-    SELECT 
-        r.path as root_path, 
-        d.name as dir_name, 
-        f.name as file_name
-    FROM files f
-    JOIN directories d ON f.directory = d.id
-    JOIN roots r ON d.root = r.id
-    """
-    params = []
-    
-    if args.root:
-        query += " WHERE r.path = ?"
-        params.append(os.path.abspath(args.root))
-    
-    query += " ORDER BY r.path, d.name, f.name"
-    
-    files = []
-    for row in cur.execute(query, params):
-        rel_path = os.path.join(row['dir_name'], row['file_name'])
-        files.append({
-            'path': rel_path,
-        })
-    
-    tree = build_tree(files)
-    print_tree(tree)
+
+    walk_roots(cur, start_root_cb=tree_start_root_cb, file_cb=tree_file_cb)
