@@ -56,7 +56,9 @@ def run(args):
                 print(f"Warning: Root directory '{root_path}' does not exist, skipping...")
                 continue
             
-            dir_id = None
+            db.upsert_directory(conn, root_id, os.path.basename(root_path), None, "", "inherited")
+            dir_id = db.get_directory_by_path(conn, root_id, "")
+
             for dirpath, dirnames, filenames in os.walk(root_path):
                 dirlocalpath = os.path.relpath(dirpath, root_path)
                 if dirlocalpath == '.':
@@ -158,16 +160,11 @@ def run(args):
         
         # Delete files that were not analysed (no longer exist on disk)
         deleted_files = cur.execute("""
-            SELECT id, name, directory FROM files WHERE analysed = 0
-        """).fetchall()
-        
-        for file_id, file_name, dir_id in deleted_files:
-            # Delete associated hashes first due to foreign key constraint
-            cur.execute("DELETE FROM sha256 WHERE file = ?", (file_id,))
-            # Delete the file
-            cur.execute("DELETE FROM files WHERE id = ?", (file_id,))
-            files_deleted += 1
-            #print(f"DELETED: {file_name} (ID: {file_id}) from directory ID {dir_id}")
+            DELETE FROM files WHERE id IN (
+                SELECT id FROM files WHERE analysed = 0
+            )
+        """).rowcount
+        files_deleted += deleted_files
         
         # Update the database timestamp
         db.touch_update(conn)
