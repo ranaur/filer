@@ -37,7 +37,8 @@ def walk_roots(cur, initial_state={}, start_root_cb = None, end_root_cb = None, 
     """
     
     cur.execute("""
-    SELECT id, path, classification from roots
+    SELECT directories.id directory_id, roots.path from roots
+    JOIN directories ON roots.id = directories.root and parent is NULL
     """)
     root_dirs = cur.fetchall()
     
@@ -45,12 +46,12 @@ def walk_roots(cur, initial_state={}, start_root_cb = None, end_root_cb = None, 
         if start_root_cb is not None:
             start_root_cb(initial_state, root) 
 
-        walk_directories(cur, initial_state, root["id"], None, start_directory_cb, end_directory_cb, file_cb)
+        walk_directories(cur, initial_state, root["directory_id"], start_directory_cb, end_directory_cb, file_cb)
 
         if end_root_cb is not None:
             end_root_cb(initial_state, root) 
 
-def walk_directories(cur, state, root_id, directory_id = None, start_directory_cb = None, end_directory_cb = None, file_cb = None, depth = 1):
+def walk_directories(cur, state, directory_id = None, start_directory_cb = None, end_directory_cb = None, file_cb = None, depth = 1):
     if start_directory_cb is not None:
         start_directory_cb(state, directory_id, depth)
 
@@ -58,11 +59,11 @@ def walk_directories(cur, state, root_id, directory_id = None, start_directory_c
     SELECT files.id id, directories.id directory_id, files.name name, classification, files.ctime, files.mtime, files.size, files.mode, files.uid, files.gid, files.inode, files.dev, files.nlink, "file" type
     FROM files 
     JOIN directories ON files.directory = directories.id
-    WHERE files.directory is ? and roots.id is ?
+    WHERE files.directory is ?
     UNION ALL
     SELECT "", directories.id directory_id, directories.name name, directories.classification, "", "", "", "", "", "", "", "", "", "directory" type
-    FROM directories WHERE parent is ? and roots.id is ?
-    ORDER BY name""", (directory_id, root_id, directory_id, root_id))
+    FROM directories WHERE parent is ?
+    ORDER BY name""", (directory_id, directory_id))
     files = cur.fetchall()
 
     pos=1
@@ -76,7 +77,7 @@ def walk_directories(cur, state, root_id, directory_id = None, start_directory_c
             file_cb(state, file, depth)
 
         if file["type"] == "directory":
-            _walk_directories(cur, start_directory_cb, end_directory_cb, file_cb, file["directory_id"], state, depth + 1)
+            walk_directories(cur, state, file["directory_id"], start_directory_cb, end_directory_cb, file_cb, depth + 1)
         pos = pos + 1
 
     if end_directory_cb is not None:
